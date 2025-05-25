@@ -49,6 +49,14 @@
             background: #ccc;
             cursor: not-allowed;
         }
+        .error {
+            color: #dc3545;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -69,31 +77,42 @@
 
     <script>
         let worker = null;
+        let scheduler = null;
 
         async function initWorker() {
-            const scheduler = Tesseract.createScheduler();
-            worker = await Tesseract.createWorker('eng', 1, {
-                logger: message => {
-                    if (message.status === 'recognizing text') {
-                        document.getElementById('progress').textContent = 
-                            `Processing: ${(message.progress * 100).toFixed(2)}%`;
-                    } else {
-                        document.getElementById('progress').textContent = 
-                            `Status: ${message.status}`;
+            try {
+                scheduler = Tesseract.createScheduler();
+                worker = await Tesseract.createWorker({
+                    logger: message => {
+                        const progress = document.getElementById('progress');
+                        if (message.status === 'recognizing text') {
+                            progress.textContent = `Processing: ${(message.progress * 100).toFixed(2)}%`;
+                            progress.className = 'progress';
+                        } else {
+                            progress.textContent = `Status: ${message.status}`;
+                            progress.className = 'progress';
+                        }
                     }
-                }
-            });
-            await scheduler.addWorker(worker);
-            document.getElementById('process-btn').disabled = false;
+                });
+                
+                await worker.loadLanguage('eng');
+                await worker.initialize('eng');
+                await scheduler.addWorker(worker);
+                
+                document.getElementById('process-btn').disabled = false;
+                document.getElementById('progress').textContent = 'Ready to process images';
+            } catch (error) {
+                console.error('Worker initialization failed:', error);
+                const progress = document.getElementById('progress');
+                progress.textContent = `Failed to initialize OCR engine: ${error.message || 'Unknown error'}`;
+                progress.className = 'progress error';
+            }
         }
 
         // Initialize the worker
         document.getElementById('process-btn').disabled = true;
         document.getElementById('progress').textContent = 'Initializing OCR engine...';
-        initWorker().catch(err => {
-            document.getElementById('progress').textContent = `Failed to initialize: ${err.message}`;
-            console.error('Failed to initialize worker:', err);
-        });
+        initWorker();
 
         async function processImage() {
             const input = document.getElementById('image-input');
@@ -101,6 +120,12 @@
             const result = document.getElementById('result');
             const progress = document.getElementById('progress');
             const processBtn = document.getElementById('process-btn');
+
+            if (!worker) {
+                progress.textContent = 'OCR engine not initialized. Please refresh the page.';
+                progress.className = 'progress error';
+                return;
+            }
 
             if (!input.files || !input.files[0]) {
                 alert('Please select an image first.');
@@ -115,14 +140,22 @@
             // Clear previous results and disable button
             result.textContent = '';
             progress.textContent = 'Starting OCR...';
+            progress.className = 'progress';
             processBtn.disabled = true;
 
             try {
-                const { data: { text } } = await worker.recognize(file);
-                result.textContent = text;
+                const response = await worker.recognize(file);
+                if (response && response.data && response.data.text) {
+                    result.textContent = response.data.text;
+                    progress.textContent = 'Processing complete!';
+                } else {
+                    throw new Error('No text was extracted from the image');
+                }
             } catch (error) {
-                result.textContent = `Error: ${error.message}`;
-                console.error(error);
+                console.error('OCR processing failed:', error);
+                result.textContent = '';
+                progress.textContent = `Error: ${error.message || 'Failed to process image'}`;
+                progress.className = 'progress error';
             } finally {
                 processBtn.disabled = false;
             }
