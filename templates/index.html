@@ -45,6 +45,10 @@
         button:hover {
             background: #0056b3;
         }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -53,7 +57,7 @@
         
         <div>
             <input type="file" id="image-input" accept="image/*">
-            <button onclick="processImage()">Process Image</button>
+            <button onclick="processImage()" id="process-btn">Process Image</button>
         </div>
 
         <img id="preview">
@@ -64,32 +68,39 @@
     </div>
 
     <script>
-        const worker = Tesseract.createWorker({
-            logger: message => {
-                if (message.status === 'recognizing text') {
-                    document.getElementById('progress').textContent = 
-                        `Processing: ${(message.progress * 100).toFixed(2)}%`;
-                } else {
-                    document.getElementById('progress').textContent = 
-                        `Status: ${message.status}`;
-                }
-            }
-        });
+        let worker = null;
 
         async function initWorker() {
-            await worker.load();
-            await worker.loadLanguage('eng');
-            await worker.initialize('eng');
+            const scheduler = Tesseract.createScheduler();
+            worker = await Tesseract.createWorker('eng', 1, {
+                logger: message => {
+                    if (message.status === 'recognizing text') {
+                        document.getElementById('progress').textContent = 
+                            `Processing: ${(message.progress * 100).toFixed(2)}%`;
+                    } else {
+                        document.getElementById('progress').textContent = 
+                            `Status: ${message.status}`;
+                    }
+                }
+            });
+            await scheduler.addWorker(worker);
+            document.getElementById('process-btn').disabled = false;
         }
 
         // Initialize the worker
-        initWorker();
+        document.getElementById('process-btn').disabled = true;
+        document.getElementById('progress').textContent = 'Initializing OCR engine...';
+        initWorker().catch(err => {
+            document.getElementById('progress').textContent = `Failed to initialize: ${err.message}`;
+            console.error('Failed to initialize worker:', err);
+        });
 
         async function processImage() {
             const input = document.getElementById('image-input');
             const preview = document.getElementById('preview');
             const result = document.getElementById('result');
             const progress = document.getElementById('progress');
+            const processBtn = document.getElementById('process-btn');
 
             if (!input.files || !input.files[0]) {
                 alert('Please select an image first.');
@@ -101,9 +112,10 @@
             // Show image preview
             preview.src = URL.createObjectURL(file);
             
-            // Clear previous results
+            // Clear previous results and disable button
             result.textContent = '';
-            progress.textContent = 'Starting...';
+            progress.textContent = 'Starting OCR...';
+            processBtn.disabled = true;
 
             try {
                 const { data: { text } } = await worker.recognize(file);
@@ -111,6 +123,8 @@
             } catch (error) {
                 result.textContent = `Error: ${error.message}`;
                 console.error(error);
+            } finally {
+                processBtn.disabled = false;
             }
         }
     </script>
