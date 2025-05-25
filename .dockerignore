@@ -1,0 +1,22 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.Python
+venv/
+.env
+
+# IDE
+.vscode/
+*.swp
+*.swo
+
+# Project specific
+uploads/*
+*.log
+render.yaml 

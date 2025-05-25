@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OCR App</title>
+    <script src='https://unpkg.com/tesseract.js@v4.1.1/dist/tesseract.min.js'></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        #preview {
+            max-width: 100%;
+            margin-top: 20px;
+        }
+        #result {
+            white-space: pre-wrap;
+            padding: 15px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background: #f9f9f9;
+        }
+        .progress {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f0f0f0;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>OCR App</h1>
+        
+        <div>
+            <input type="file" id="image-input" accept="image/*">
+            <button onclick="processImage()">Process Image</button>
+        </div>
+
+        <img id="preview">
+        
+        <div class="progress" id="progress"></div>
+        
+        <div id="result"></div>
+    </div>
+
+    <script>
+        const worker = Tesseract.createWorker({
+            logger: message => {
+                if (message.status === 'recognizing text') {
+                    document.getElementById('progress').textContent = 
+                        `Processing: ${(message.progress * 100).toFixed(2)}%`;
+                } else {
+                    document.getElementById('progress').textContent = 
+                        `Status: ${message.status}`;
+                }
+            }
+        });
+
+        async function initWorker() {
+            await worker.load();
+            await worker.loadLanguage('eng');
+            await worker.initialize('eng');
+        }
+
+        // Initialize the worker
+        initWorker();
+
+        async function processImage() {
+            const input = document.getElementById('image-input');
+            const preview = document.getElementById('preview');
+            const result = document.getElementById('result');
+            const progress = document.getElementById('progress');
+
+            if (!input.files || !input.files[0]) {
+                alert('Please select an image first.');
+                return;
+            }
+
+            const file = input.files[0];
+            
+            // Show image preview
+            preview.src = URL.createObjectURL(file);
+            
+            // Clear previous results
+            result.textContent = '';
+            progress.textContent = 'Starting...';
+
+            try {
+                const { data: { text } } = await worker.recognize(file);
+                result.textContent = text;
+            } catch (error) {
+                result.textContent = `Error: ${error.message}`;
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html> 
