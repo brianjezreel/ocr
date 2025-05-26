@@ -229,6 +229,152 @@
         .threshold-controls input[type="range"] {
             width: 200px;
         }
+
+        .confidence-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .confidence-controls input[type="number"] {
+            width: 60px;
+            padding: 4px;
+            background: var(--bg-primary);
+            border: 1px solid var(--accent);
+            border-radius: 4px;
+            color: var(--text-primary);
+        }
+
+        .word-block {
+            display: inline-flex;
+            align-items: baseline;
+            margin: 0 4px;
+            padding: 2px 4px;
+            border-radius: 4px;
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .word-block .confidence {
+            font-size: 0.7em;
+            margin-left: 4px;
+            opacity: 0.7;
+        }
+
+        .low-confidence {
+            background-color: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .medium-confidence {
+            background-color: rgba(245, 158, 11, 0.2);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+
+        .high-confidence {
+            background-color: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(34, 197, 94, 0.3);
+        }
+
+        .language-select {
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            min-width: 150px;
+        }
+
+        .language-select:focus {
+            outline: none;
+            border-color: var(--accent-hover);
+        }
+
+        .loading-language {
+            color: var(--accent);
+            font-size: 14px;
+            margin-left: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .loading-language::after {
+            content: '';
+            width: 16px;
+            height: 16px;
+            border: 2px solid var(--accent);
+            border-right-color: transparent;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .result-container {
+            margin-top: 20px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .result-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 16px;
+            border-bottom: 1px solid var(--bg-primary);
+        }
+
+        .result-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+
+        .copy-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            border: 1px solid var(--accent);
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .copy-button:hover {
+            background: var(--accent);
+            color: white;
+        }
+
+        .copy-button .icon {
+            width: 16px;
+            height: 16px;
+        }
+
+        .copy-button.copied {
+            background: var(--accent);
+            color: white;
+        }
+
+        .copy-button.copied span {
+            content: 'Copied!';
+        }
+
+        #result {
+            padding: 16px;
+            white-space: pre-wrap;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
     </style>
 </head>
 <body>
@@ -285,6 +431,39 @@
             </div>
         </div>
 
+        <div class="preprocessing-controls">
+            <h3>OCR Settings</h3>
+            <div class="control-group">
+                <label class="language-select-label">Language:
+                    <select id="language-select" class="language-select">
+                        <option value="eng">English</option>
+                        <option value="fil">Filipino/Tagalog</option>
+                        <option value="eng+fil">English + Filipino</option>
+                    </select>
+                </label>
+                <div id="loading-language" class="loading-language" style="display: none;">
+                    Loading language data... Please wait.
+                </div>
+                <label>
+                    <input type="checkbox" id="filter-confidence" checked>
+                    Filter Low Confidence Words
+                </label>
+                <div class="confidence-controls">
+                    <label>Minimum Confidence (%):
+                        <input type="number" id="min-confidence" value="60" min="0" max="100">
+                    </label>
+                </div>
+                <label>
+                    <input type="checkbox" id="validate-words" checked>
+                    Dictionary Validation
+                </label>
+                <label>
+                    <input type="checkbox" id="show-confidence" checked>
+                    Show Confidence Scores
+                </label>
+            </div>
+        </div>
+
         <video id="camera-feed" autoplay playsinline></video>
         
         <div class="camera-controls" id="camera-controls">
@@ -302,7 +481,18 @@
         
         <div class="progress" id="progress">Ready to process images</div>
         
-        <div id="result"></div>
+        <div class="result-container">
+            <div class="result-header">
+                <h3>OCR Result</h3>
+                <button onclick="copyResult()" class="copy-button" id="copy-btn">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z" />
+                    </svg>
+                    <span>Copy</span>
+                </button>
+            </div>
+            <div id="result"></div>
+        </div>
     </div>
 
     <script>
@@ -310,7 +500,49 @@
         let scheduler = null;
         let stream = null;
         let cameras = [];
+        let loadedLanguages = new Set(['eng']); // Track loaded languages
+        let dictionaries = {
+            eng: new Set(),
+            fil: new Set()
+        };
 
+        // Modified loadDictionary function to support multiple languages
+        async function loadDictionary() {
+            try {
+                // Load English dictionary
+                const engResponse = await fetch('https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt');
+                const engText = await engResponse.text();
+                dictionaries.eng = new Set(engText.split('\n').map(word => word.trim().toLowerCase()));
+
+                // Load Filipino dictionary
+                const filResponse = await fetch('https://raw.githubusercontent.com/jcblw/filipino-words-json/master/words.json');
+                const filWords = await filResponse.json();
+                dictionaries.fil = new Set(filWords.map(word => word.toLowerCase()));
+            } catch (error) {
+                console.error('Failed to load dictionaries:', error);
+            }
+        }
+
+        // Load dictionaries when page loads
+        loadDictionary();
+
+        // Function to validate a word against appropriate dictionary
+        function isValidWord(word) {
+            const cleanWord = word.toLowerCase().replace(/[^a-zñáéíóúü]/g, '');
+            if (cleanWord.length <= 1) return true;
+
+            const currentLang = document.getElementById('language-select').value;
+            
+            // For combined language mode, check both dictionaries
+            if (currentLang === 'eng+fil') {
+                return dictionaries.eng.has(cleanWord) || dictionaries.fil.has(cleanWord);
+            }
+            
+            // Check against the selected language dictionary
+            return dictionaries[currentLang].has(cleanWord);
+        }
+
+        // Modified initWorker function to handle language loading
         async function initWorker() {
             try {
                 scheduler = Tesseract.createScheduler();
@@ -319,16 +551,15 @@
                         const progress = document.getElementById('progress');
                         if (message.status === 'recognizing text') {
                             progress.textContent = `Processing: ${(message.progress * 100).toFixed(2)}%`;
-                            progress.className = 'progress';
                         } else {
                             progress.textContent = `Status: ${message.status}`;
-                            progress.className = 'progress';
                         }
+                        progress.className = 'progress';
                     }
                 });
                 
-                await worker.loadLanguage('eng');
-                await worker.initialize('eng');
+                // Initialize with English by default
+                await loadLanguage('eng');
                 await scheduler.addWorker(worker);
                 
                 document.getElementById('process-btn').disabled = false;
@@ -341,10 +572,206 @@
             }
         }
 
-        // Initialize the worker
-        document.getElementById('process-btn').disabled = true;
-        document.getElementById('progress').textContent = 'Initializing OCR engine...';
-        initWorker();
+        // Function to load a language
+        async function loadLanguage(lang) {
+            const loadingDiv = document.getElementById('loading-language');
+            const processBtn = document.getElementById('process-btn');
+            
+            if (!loadedLanguages.has(lang)) {
+                loadingDiv.style.display = 'flex';
+                processBtn.disabled = true;
+                
+                try {
+                    await worker.loadLanguage(lang);
+                    loadedLanguages.add(lang);
+                } finally {
+                    loadingDiv.style.display = 'none';
+                    processBtn.disabled = false;
+                }
+            }
+            
+            // Initialize the worker with the selected language(s)
+            await worker.initialize(lang);
+        }
+
+        // Modified processImage function
+        async function processImage() {
+            const currentLang = document.getElementById('language-select').value;
+            
+            // Load language if needed and initialize worker
+            await loadLanguage(currentLang);
+            
+            const input = document.getElementById('image-input');
+            const preview = document.getElementById('preview');
+            const result = document.getElementById('result');
+            const progress = document.getElementById('progress');
+            const processBtn = document.getElementById('process-btn');
+
+            if (!worker) {
+                progress.textContent = 'OCR engine not initialized. Please refresh the page.';
+                progress.className = 'progress error';
+                return;
+            }
+
+            let imageFile;
+            if (input.files && input.files[0]) {
+                imageFile = input.files[0];
+            } else if (preview.src && preview.src.startsWith('data:image')) {
+                const response = await fetch(preview.src);
+                imageFile = await response.blob();
+            } else {
+                alert('Please select an image or capture one from camera.');
+                return;
+            }
+            
+            // Show image preview
+            const imageUrl = URL.createObjectURL(imageFile);
+            preview.src = imageUrl;
+            
+            // Clear previous results and disable button
+            result.textContent = '';
+            progress.textContent = 'Starting preprocessing...';
+            progress.className = 'progress';
+            processBtn.disabled = true;
+
+            try {
+                // Wait for the image to load
+                await new Promise(resolve => {
+                    preview.onload = resolve;
+                });
+
+                // Create a canvas for preprocessing
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = preview.naturalWidth;
+                canvas.height = preview.naturalHeight;
+                ctx.drawImage(preview, 0, 0);
+                
+                // Get image data for preprocessing
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                // Preprocess the image
+                progress.textContent = 'Preprocessing image...';
+                const processedImageUrl = await preprocessImage(imageData);
+                
+                // Update preview with processed image
+                preview.src = processedImageUrl;
+                
+                // Perform OCR on processed image
+                progress.textContent = 'Performing OCR...';
+                const response = await worker.recognize(processedImageUrl);
+                
+                if (response && response.data) {
+                    // Format results with confidence scores and filtering
+                    result.innerHTML = formatResults(response.data.words);
+                    progress.textContent = 'Processing complete!';
+                    
+                    // Draw bounding boxes
+                    await drawBoundingBoxes(
+                        response.data.words.filter(word => {
+                            const minConfidence = parseFloat(document.getElementById('min-confidence').value) / 100;
+                            return (!document.getElementById('filter-confidence').checked || word.confidence >= minConfidence) &&
+                                   (!document.getElementById('validate-words').checked || isValidWord(word.text));
+                        }),
+                        preview.naturalWidth,
+                        preview.naturalHeight
+                    );
+                } else {
+                    throw new Error('No text was extracted from the image');
+                }
+            } catch (error) {
+                console.error('OCR processing failed:', error);
+                result.textContent = '';
+                progress.textContent = `Error: ${error.message || 'Failed to process image'}`;
+                progress.className = 'progress error';
+            } finally {
+                processBtn.disabled = false;
+            }
+        }
+
+        // Function to copy OCR result to clipboard
+        async function copyResult() {
+            const result = document.getElementById('result');
+            const copyBtn = document.getElementById('copy-btn');
+            
+            // Get the text content, removing any HTML tags
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = result.innerHTML;
+            const textToCopy = tempDiv.textContent || tempDiv.innerText || '';
+            
+            try {
+                await navigator.clipboard.writeText(textToCopy);
+                
+                // Visual feedback
+                copyBtn.classList.add('copied');
+                copyBtn.querySelector('span').textContent = 'Copied!';
+                
+                // Reset button after 2 seconds
+                setTimeout(() => {
+                    copyBtn.classList.remove('copied');
+                    copyBtn.querySelector('span').textContent = 'Copy';
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy text:', err);
+                
+                // Fallback for older browsers
+                const textarea = document.createElement('textarea');
+                textarea.value = textToCopy;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                
+                try {
+                    document.execCommand('copy');
+                    copyBtn.classList.add('copied');
+                    copyBtn.querySelector('span').textContent = 'Copied!';
+                    
+                    setTimeout(() => {
+                        copyBtn.classList.remove('copied');
+                        copyBtn.querySelector('span').textContent = 'Copy';
+                    }, 2000);
+                } catch (err) {
+                    console.error('Fallback copy failed:', err);
+                    alert('Failed to copy text to clipboard');
+                } finally {
+                    document.body.removeChild(textarea);
+                }
+            }
+        }
+
+        // Function to format OCR results with confidence scores
+        function formatResults(words) {
+            const showConfidence = document.getElementById('show-confidence').checked;
+            const filterConfidence = document.getElementById('filter-confidence').checked;
+            const validateWords = document.getElementById('validate-words').checked;
+            const minConfidence = parseFloat(document.getElementById('min-confidence').value) / 100;
+
+            const formattedWords = words.map(word => {
+                // Skip words below confidence threshold
+                if (filterConfidence && word.confidence < minConfidence) {
+                    return '';
+                }
+
+                // Skip invalid words if validation is enabled
+                if (validateWords && !isValidWord(word.text)) {
+                    return '';
+                }
+
+                // Determine confidence class
+                let confidenceClass = 'high-confidence';
+                if (word.confidence < 0.7) confidenceClass = 'medium-confidence';
+                if (word.confidence < 0.5) confidenceClass = 'low-confidence';
+
+                // Format word with confidence score
+                const confidenceScore = showConfidence ? 
+                    `<span class="confidence">${(word.confidence * 100).toFixed(0)}%</span>` : '';
+
+                return `<span class="word-block ${confidenceClass}">${word.text}${confidenceScore}</span>`;
+            });
+
+            return formattedWords.filter(w => w).join(' ');
+        }
 
         async function drawBoundingBoxes(words, imageWidth, imageHeight) {
             const canvas = document.getElementById('canvas-overlay');
@@ -471,91 +898,6 @@
             // Update canvas with processed image
             ctx.putImageData(data, 0, 0);
             return canvas.toDataURL();
-        }
-
-        // Modify the processImage function to use preprocessing
-        async function processImage() {
-            const input = document.getElementById('image-input');
-            const preview = document.getElementById('preview');
-            const result = document.getElementById('result');
-            const progress = document.getElementById('progress');
-            const processBtn = document.getElementById('process-btn');
-
-            if (!worker) {
-                progress.textContent = 'OCR engine not initialized. Please refresh the page.';
-                progress.className = 'progress error';
-                return;
-            }
-
-            let imageFile;
-            if (input.files && input.files[0]) {
-                imageFile = input.files[0];
-            } else if (preview.src && preview.src.startsWith('data:image')) {
-                const response = await fetch(preview.src);
-                imageFile = await response.blob();
-            } else {
-                alert('Please select an image or capture one from camera.');
-                return;
-            }
-            
-            // Show image preview
-            const imageUrl = URL.createObjectURL(imageFile);
-            preview.src = imageUrl;
-            
-            // Clear previous results and disable button
-            result.textContent = '';
-            progress.textContent = 'Starting preprocessing...';
-            progress.className = 'progress';
-            processBtn.disabled = true;
-
-            try {
-                // Wait for the image to load
-                await new Promise(resolve => {
-                    preview.onload = resolve;
-                });
-
-                // Create a canvas for preprocessing
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = preview.naturalWidth;
-                canvas.height = preview.naturalHeight;
-                ctx.drawImage(preview, 0, 0);
-                
-                // Get image data for preprocessing
-                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                
-                // Preprocess the image
-                progress.textContent = 'Preprocessing image...';
-                const processedImageUrl = await preprocessImage(imageData);
-                
-                // Update preview with processed image
-                preview.src = processedImageUrl;
-                
-                // Perform OCR on processed image
-                progress.textContent = 'Performing OCR...';
-                const response = await worker.recognize(processedImageUrl);
-                
-                if (response && response.data) {
-                    result.textContent = response.data.text;
-                    progress.textContent = 'Processing complete!';
-                    
-                    // Draw bounding boxes
-                    await drawBoundingBoxes(
-                        response.data.words,
-                        preview.naturalWidth,
-                        preview.naturalHeight
-                    );
-                } else {
-                    throw new Error('No text was extracted from the image');
-                }
-            } catch (error) {
-                console.error('OCR processing failed:', error);
-                result.textContent = '';
-                progress.textContent = `Error: ${error.message || 'Failed to process image'}`;
-                progress.className = 'progress error';
-            } finally {
-                processBtn.disabled = false;
-            }
         }
 
         // Function to populate camera selection
@@ -697,6 +1039,44 @@
         // Add event listener for threshold value
         document.getElementById('threshold-value').addEventListener('input', function() {
             document.getElementById('threshold-display').textContent = this.value;
+        });
+
+        // Add listeners for OCR settings
+        document.getElementById('filter-confidence').addEventListener('change', () => {
+            if (result.innerHTML) processImage();
+        });
+
+        document.getElementById('min-confidence').addEventListener('change', () => {
+            if (result.innerHTML) processImage();
+        });
+
+        document.getElementById('validate-words').addEventListener('change', () => {
+            if (result.innerHTML) processImage();
+        });
+
+        document.getElementById('show-confidence').addEventListener('change', () => {
+            if (result.innerHTML) processImage();
+        });
+
+        // Add language selection change handler
+        document.getElementById('language-select').addEventListener('change', async function() {
+            const selectedLang = this.value;
+            const progress = document.getElementById('progress');
+            progress.textContent = 'Switching language...';
+            
+            try {
+                await loadLanguage(selectedLang);
+                progress.textContent = 'Ready to process images';
+                
+                // Reprocess current image if one exists
+                if (document.getElementById('preview').src) {
+                    await processImage();
+                }
+            } catch (error) {
+                console.error('Language switch failed:', error);
+                progress.textContent = `Failed to switch language: ${error.message || 'Unknown error'}`;
+                progress.className = 'progress error';
+            }
         });
     </script>
 </body>
