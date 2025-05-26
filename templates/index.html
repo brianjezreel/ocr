@@ -6,71 +6,210 @@
     <title>OCR App</title>
     <script src='https://unpkg.com/tesseract.js@v4.1.1/dist/tesseract.min.js'></script>
     <style>
+        :root {
+            --bg-primary: #1a1a1a;
+            --bg-secondary: #2d2d2d;
+            --text-primary: #ffffff;
+            --text-secondary: #b3b3b3;
+            --accent: #6366f1;
+            --accent-hover: #818cf8;
+            --error-bg: #442626;
+            --error-border: #dc2626;
+            --error-text: #ef4444;
+        }
+
         body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            max-width: 1000px;
             margin: 0 auto;
             padding: 20px;
+            line-height: 1.6;
         }
+
         .container {
             display: flex;
             flex-direction: column;
-            gap: 20px;
+            gap: 24px;
         }
-        #preview {
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            background: linear-gradient(to right, var(--accent), var(--accent-hover));
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+
+        .input-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .preview-container {
+            position: relative;
             max-width: 100%;
             margin-top: 20px;
+            background: var(--bg-secondary);
+            padding: 16px;
+            border-radius: 8px;
+            overflow: hidden;
         }
+
+        #preview {
+            max-width: 100%;
+            border-radius: 4px;
+        }
+
+        #canvas-overlay {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            pointer-events: none;
+        }
+
         #result {
             white-space: pre-wrap;
-            padding: 15px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-            background: #f9f9f9;
+            padding: 16px;
+            border-radius: 8px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            font-family: 'Roboto Mono', monospace;
+            font-size: 0.9rem;
+            line-height: 1.5;
         }
+
         .progress {
-            margin-top: 10px;
-            padding: 10px;
-            background: #f0f0f0;
-            border-radius: 4px;
+            padding: 12px 16px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            color: var(--text-secondary);
         }
+
+        .error {
+            color: var(--error-text);
+            background: var(--error-bg);
+            border: 1px solid var(--error-border);
+            padding: 12px 16px;
+            border-radius: 8px;
+        }
+
         button {
             padding: 10px 20px;
-            background: #007bff;
+            background: var(--accent);
             color: white;
             border: none;
-            border-radius: 4px;
+            border-radius: 8px;
             cursor: pointer;
+            font-weight: 500;
+            transition: all 0.2s ease;
         }
-        button:hover {
-            background: #0056b3;
+
+        button:hover:not(:disabled) {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
         }
+
         button:disabled {
-            background: #ccc;
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
             cursor: not-allowed;
         }
-        .error {
-            color: #dc3545;
-            background: #f8d7da;
-            border: 1px solid #f5c6cb;
-            padding: 10px;
-            border-radius: 4px;
-            margin-top: 10px;
+
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        .file-input-wrapper input[type="file"] {
+            display: none;
+        }
+
+        .file-input-wrapper label {
+            padding: 10px 20px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .file-input-wrapper label:hover {
+            background: #3d3d3d;
+        }
+
+        #camera-feed {
+            width: 100%;
+            max-width: 640px;
+            background: var(--bg-secondary);
+            border-radius: 8px;
+            display: none;
+        }
+
+        .camera-controls {
+            display: none;
+            gap: 12px;
+            margin-top: 12px;
+        }
+
+        .icon {
+            width: 20px;
+            height: 20px;
+            fill: currentColor;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>OCR App</h1>
+        <div class="header">
+            <h1>OCR App</h1>
+        </div>
         
-        <div>
-            <input type="file" id="image-input" accept="image/*">
+        <div class="input-group">
+            <div class="file-input-wrapper">
+                <input type="file" id="image-input" accept="image/*">
+                <label for="image-input">
+                    <svg class="icon" viewBox="0 0 24 24">
+                        <path d="M19,13H13V19H11V13H5V11H11V5H13V11H19V13Z" />
+                    </svg>
+                    Choose Image
+                </label>
+            </div>
+            <button onclick="toggleCamera()" id="camera-btn">
+                <svg class="icon" viewBox="0 0 24 24">
+                    <path d="M12,10L11.06,12.06L9,13L11.06,13.94L12,16L12.94,13.94L15,13L12.94,12.06L12,10M20,5H16.83L15,3H9L7.17,5H4A2,2 0 0,0 2,7V19A2,2 0 0,0 4,21H20A2,2 0 0,0 22,19V7A2,2 0 0,0 20,5M20,19H4V7H8.05L9.88,5H14.12L15.95,7H20V19M12,8A5,5 0 0,0 7,13A5,5 0 0,0 12,18A5,5 0 0,0 17,13A5,5 0 0,0 12,8" />
+                </svg>
+                Use Camera
+            </button>
             <button onclick="processImage()" id="process-btn">Process Image</button>
         </div>
 
-        <img id="preview">
+        <video id="camera-feed" autoplay playsinline></video>
         
-        <div class="progress" id="progress"></div>
+        <div class="camera-controls" id="camera-controls">
+            <button onclick="captureImage()" id="capture-btn">Capture</button>
+            <button onclick="toggleCamera()" id="stop-camera-btn">Stop Camera</button>
+        </div>
+
+        <div class="preview-container">
+            <img id="preview">
+            <canvas id="canvas-overlay"></canvas>
+        </div>
+        
+        <div class="progress" id="progress">Ready to process images</div>
         
         <div id="result"></div>
     </div>
@@ -78,6 +217,7 @@
     <script>
         let worker = null;
         let scheduler = null;
+        let stream = null;
 
         async function initWorker() {
             try {
@@ -114,6 +254,39 @@
         document.getElementById('progress').textContent = 'Initializing OCR engine...';
         initWorker();
 
+        async function drawBoundingBoxes(words, imageWidth, imageHeight) {
+            const canvas = document.getElementById('canvas-overlay');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size to match the image
+            canvas.width = imageWidth;
+            canvas.height = imageHeight;
+            
+            // Clear previous drawings
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Set styling for the boxes
+            ctx.strokeStyle = '#6366f1';
+            ctx.lineWidth = 2;
+            ctx.font = '14px Inter';
+            ctx.fillStyle = '#6366f1';
+            
+            words.forEach(word => {
+                const { bbox } = word;
+                const x = bbox.x0;
+                const y = bbox.y0;
+                const width = bbox.x1 - bbox.x0;
+                const height = bbox.y1 - bbox.y0;
+                
+                // Draw rectangle
+                ctx.strokeRect(x, y, width, height);
+                
+                // Draw confidence score
+                const confidence = (word.confidence * 100).toFixed(0);
+                ctx.fillText(`${confidence}%`, x, y - 5);
+            });
+        }
+
         async function processImage() {
             const input = document.getElementById('image-input');
             const preview = document.getElementById('preview');
@@ -127,15 +300,21 @@
                 return;
             }
 
-            if (!input.files || !input.files[0]) {
-                alert('Please select an image first.');
+            let imageFile;
+            if (input.files && input.files[0]) {
+                imageFile = input.files[0];
+            } else if (preview.src && preview.src.startsWith('data:image')) {
+                // Convert data URL to blob for camera capture
+                const response = await fetch(preview.src);
+                imageFile = await response.blob();
+            } else {
+                alert('Please select an image or capture one from camera.');
                 return;
             }
-
-            const file = input.files[0];
             
             // Show image preview
-            preview.src = URL.createObjectURL(file);
+            const imageUrl = URL.createObjectURL(imageFile);
+            preview.src = imageUrl;
             
             // Clear previous results and disable button
             result.textContent = '';
@@ -144,10 +323,22 @@
             processBtn.disabled = true;
 
             try {
-                const response = await worker.recognize(file);
-                if (response && response.data && response.data.text) {
+                // Wait for the image to load before getting dimensions
+                await new Promise(resolve => {
+                    preview.onload = resolve;
+                });
+
+                const response = await worker.recognize(imageFile);
+                if (response && response.data) {
                     result.textContent = response.data.text;
                     progress.textContent = 'Processing complete!';
+                    
+                    // Draw bounding boxes
+                    await drawBoundingBoxes(
+                        response.data.words,
+                        preview.naturalWidth,
+                        preview.naturalHeight
+                    );
                 } else {
                     throw new Error('No text was extracted from the image');
                 }
@@ -160,6 +351,67 @@
                 processBtn.disabled = false;
             }
         }
+
+        async function toggleCamera() {
+            const cameraFeed = document.getElementById('camera-feed');
+            const cameraControls = document.getElementById('camera-controls');
+            
+            if (stream) {
+                // Stop the camera
+                stream.getTracks().forEach(track => track.stop());
+                stream = null;
+                cameraFeed.style.display = 'none';
+                cameraControls.style.display = 'none';
+                return;
+            }
+
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    } 
+                });
+                cameraFeed.srcObject = stream;
+                cameraFeed.style.display = 'block';
+                cameraControls.style.display = 'flex';
+            } catch (error) {
+                console.error('Camera access failed:', error);
+                alert('Failed to access camera: ' + (error.message || 'Unknown error'));
+            }
+        }
+
+        async function captureImage() {
+            const cameraFeed = document.getElementById('camera-feed');
+            const preview = document.getElementById('preview');
+            
+            // Create a canvas to capture the image
+            const canvas = document.createElement('canvas');
+            canvas.width = cameraFeed.videoWidth;
+            canvas.height = cameraFeed.videoHeight;
+            
+            // Draw the video frame to the canvas
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(cameraFeed, 0, 0);
+            
+            // Convert to data URL and set as preview
+            preview.src = canvas.toDataURL('image/png');
+            
+            // Stop the camera
+            await toggleCamera();
+            
+            // Process the captured image
+            await processImage();
+        }
+
+        // Handle file input change
+        document.getElementById('image-input').addEventListener('change', function(e) {
+            if (this.files && this.files[0]) {
+                const preview = document.getElementById('preview');
+                preview.src = URL.createObjectURL(this.files[0]);
+            }
+        });
     </script>
 </body>
 </html> 
