@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OCR App</title>
+    <title>Image to Text (OCR)</title>
     <script src='https://unpkg.com/tesseract.js@v4.1.1/dist/tesseract.min.js'></script>
     <style>
         :root {
@@ -36,7 +36,7 @@
 
         .header {
             display: flex;
-            align-items: center;
+            align-items: flex-start;
             gap: 16px;
             margin-bottom: 16px;
         }
@@ -48,6 +48,12 @@
             -webkit-background-clip: text;
             background-clip: text;
             color: transparent;
+        }
+
+        .subheading {
+            margin: 4px 0 0 0;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
         }
 
         .input-group {
@@ -170,12 +176,68 @@
             height: 20px;
             fill: currentColor;
         }
+
+        .camera-select {
+            padding: 8px 12px;
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            border: 1px solid var(--accent);
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .camera-select:focus {
+            outline: none;
+            border-color: var(--accent-hover);
+        }
+
+        .preprocessing-controls {
+            background: var(--bg-secondary);
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 12px;
+        }
+
+        .preprocessing-controls h3 {
+            margin: 0 0 12px 0;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+
+        .control-group {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .control-group label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .threshold-controls {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .threshold-controls input[type="range"] {
+            width: 200px;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="header">
-            <h1>OCR App</h1>
+            <div>
+                <h1>Image to Text (OCR)</h1>
+                <p class="subheading">by Bautista, BJI - CS 3B</p>
+            </div>
         </div>
         
         <div class="input-group">
@@ -197,9 +259,38 @@
             <button onclick="processImage()" id="process-btn">Process Image</button>
         </div>
 
+        <div class="preprocessing-controls">
+            <h3>Image Preprocessing</h3>
+            <div class="control-group">
+                <label>
+                    <input type="checkbox" id="grayscale" checked>
+                    Convert to Grayscale
+                </label>
+                <label>
+                    <input type="checkbox" id="auto-contrast" checked>
+                    Auto Contrast
+                </label>
+                <label>
+                    <input type="checkbox" id="denoise" checked>
+                    Reduce Noise
+                </label>
+                <label>
+                    <input type="checkbox" id="threshold">
+                    Threshold
+                </label>
+                <div class="threshold-controls" id="threshold-controls" style="display: none;">
+                    <input type="range" id="threshold-value" min="0" max="255" value="128">
+                    <span id="threshold-display">128</span>
+                </div>
+            </div>
+        </div>
+
         <video id="camera-feed" autoplay playsinline></video>
         
         <div class="camera-controls" id="camera-controls">
+            <select id="camera-select" class="camera-select">
+                <option value="">Loading cameras...</option>
+            </select>
             <button onclick="captureImage()" id="capture-btn">Capture</button>
             <button onclick="toggleCamera()" id="stop-camera-btn">Stop Camera</button>
         </div>
@@ -218,6 +309,7 @@
         let worker = null;
         let scheduler = null;
         let stream = null;
+        let cameras = [];
 
         async function initWorker() {
             try {
@@ -287,6 +379,101 @@
             });
         }
 
+        // Function to preprocess the image
+        async function preprocessImage(imageData) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            // Set canvas size to match image
+            canvas.width = imageData.width;
+            canvas.height = imageData.height;
+            
+            // Draw original image
+            ctx.putImageData(imageData, 0, 0);
+            
+            // Get current preprocessing settings
+            const useGrayscale = document.getElementById('grayscale').checked;
+            const useAutoContrast = document.getElementById('auto-contrast').checked;
+            const useDenoise = document.getElementById('denoise').checked;
+            const useThreshold = document.getElementById('threshold').checked;
+            const thresholdValue = document.getElementById('threshold-value').value;
+            
+            // Get image data
+            let data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            let pixels = data.data;
+            
+            // Convert to grayscale if enabled
+            if (useGrayscale) {
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const avg = (pixels[i] + pixels[i + 1] + pixels[i + 2]) / 3;
+                    pixels[i] = pixels[i + 1] = pixels[i + 2] = avg;
+                }
+            }
+            
+            // Apply auto contrast if enabled
+            if (useAutoContrast) {
+                let min = 255;
+                let max = 0;
+                
+                // Find min and max values
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const value = pixels[i];
+                    if (value < min) min = value;
+                    if (value > max) max = value;
+                }
+                
+                // Apply contrast stretching
+                const range = max - min;
+                for (let i = 0; i < pixels.length; i += 4) {
+                    pixels[i] = pixels[i + 1] = pixels[i + 2] = 
+                        ((pixels[i] - min) / range) * 255;
+                }
+            }
+            
+            // Apply noise reduction if enabled
+            if (useDenoise) {
+                const tempPixels = new Uint8ClampedArray(pixels.length);
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const x = (i / 4) % canvas.width;
+                    const y = Math.floor((i / 4) / canvas.width);
+                    
+                    if (x > 0 && x < canvas.width - 1 && y > 0 && y < canvas.height - 1) {
+                        // Apply 3x3 median filter
+                        const values = [];
+                        for (let dy = -1; dy <= 1; dy++) {
+                            for (let dx = -1; dx <= 1; dx++) {
+                                const index = i + (dy * canvas.width + dx) * 4;
+                                values.push(pixels[index]);
+                            }
+                        }
+                        values.sort((a, b) => a - b);
+                        const median = values[4]; // Middle value
+                        tempPixels[i] = tempPixels[i + 1] = tempPixels[i + 2] = median;
+                        tempPixels[i + 3] = pixels[i + 3];
+                    } else {
+                        tempPixels[i] = pixels[i];
+                        tempPixels[i + 1] = pixels[i + 1];
+                        tempPixels[i + 2] = pixels[i + 2];
+                        tempPixels[i + 3] = pixels[i + 3];
+                    }
+                }
+                pixels.set(tempPixels);
+            }
+            
+            // Apply thresholding if enabled
+            if (useThreshold) {
+                for (let i = 0; i < pixels.length; i += 4) {
+                    const value = pixels[i] > thresholdValue ? 255 : 0;
+                    pixels[i] = pixels[i + 1] = pixels[i + 2] = value;
+                }
+            }
+            
+            // Update canvas with processed image
+            ctx.putImageData(data, 0, 0);
+            return canvas.toDataURL();
+        }
+
+        // Modify the processImage function to use preprocessing
         async function processImage() {
             const input = document.getElementById('image-input');
             const preview = document.getElementById('preview');
@@ -304,7 +491,6 @@
             if (input.files && input.files[0]) {
                 imageFile = input.files[0];
             } else if (preview.src && preview.src.startsWith('data:image')) {
-                // Convert data URL to blob for camera capture
                 const response = await fetch(preview.src);
                 imageFile = await response.blob();
             } else {
@@ -318,17 +504,37 @@
             
             // Clear previous results and disable button
             result.textContent = '';
-            progress.textContent = 'Starting OCR...';
+            progress.textContent = 'Starting preprocessing...';
             progress.className = 'progress';
             processBtn.disabled = true;
 
             try {
-                // Wait for the image to load before getting dimensions
+                // Wait for the image to load
                 await new Promise(resolve => {
                     preview.onload = resolve;
                 });
 
-                const response = await worker.recognize(imageFile);
+                // Create a canvas for preprocessing
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                canvas.width = preview.naturalWidth;
+                canvas.height = preview.naturalHeight;
+                ctx.drawImage(preview, 0, 0);
+                
+                // Get image data for preprocessing
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+                
+                // Preprocess the image
+                progress.textContent = 'Preprocessing image...';
+                const processedImageUrl = await preprocessImage(imageData);
+                
+                // Update preview with processed image
+                preview.src = processedImageUrl;
+                
+                // Perform OCR on processed image
+                progress.textContent = 'Performing OCR...';
+                const response = await worker.recognize(processedImageUrl);
+                
                 if (response && response.data) {
                     result.textContent = response.data.text;
                     progress.textContent = 'Processing complete!';
@@ -352,9 +558,40 @@
             }
         }
 
+        // Function to populate camera selection
+        async function getCameraDevices() {
+            try {
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                cameras = devices.filter(device => device.kind === 'videoinput');
+                
+                const cameraSelect = document.getElementById('camera-select');
+                cameraSelect.innerHTML = '';
+                
+                cameras.forEach((camera, index) => {
+                    const option = document.createElement('option');
+                    option.value = camera.deviceId;
+                    option.text = camera.label || `Camera ${index + 1}`;
+                    cameraSelect.appendChild(option);
+                });
+
+                if (cameras.length === 0) {
+                    const option = document.createElement('option');
+                    option.value = '';
+                    option.text = 'No cameras found';
+                    cameraSelect.appendChild(option);
+                }
+            } catch (error) {
+                console.error('Error getting camera devices:', error);
+                const cameraSelect = document.getElementById('camera-select');
+                cameraSelect.innerHTML = '<option value="">Error loading cameras</option>';
+            }
+        }
+
+        // Modified toggleCamera function to use selected camera
         async function toggleCamera() {
             const cameraFeed = document.getElementById('camera-feed');
             const cameraControls = document.getElementById('camera-controls');
+            const cameraSelect = document.getElementById('camera-select');
             
             if (stream) {
                 // Stop the camera
@@ -366,16 +603,27 @@
             }
 
             try {
-                stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { 
-                        facingMode: 'environment',
+                // Get selected camera ID
+                const selectedCamera = cameraSelect.value;
+                
+                // If no camera is selected and we have cameras available, use the first one
+                const constraints = {
+                    video: {
+                        deviceId: selectedCamera ? { exact: selectedCamera } : undefined,
                         width: { ideal: 1920 },
                         height: { ideal: 1080 }
-                    } 
-                });
+                    }
+                };
+
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
                 cameraFeed.srcObject = stream;
                 cameraFeed.style.display = 'block';
                 cameraControls.style.display = 'flex';
+
+                // Get the list of cameras if we haven't already
+                if (cameras.length === 0) {
+                    await getCameraDevices();
+                }
             } catch (error) {
                 console.error('Camera access failed:', error);
                 alert('Failed to access camera: ' + (error.message || 'Unknown error'));
@@ -405,12 +653,50 @@
             await processImage();
         }
 
+        // Add event listener for camera selection change
+        document.getElementById('camera-select').addEventListener('change', async function() {
+            if (stream) {
+                // If camera is active, restart it with new selection
+                await toggleCamera(); // Stop current stream
+                await toggleCamera(); // Start new stream with selected camera
+            }
+        });
+
+        // Request camera permissions and populate camera list when camera button is first clicked
+        document.getElementById('camera-btn').addEventListener('click', async function() {
+            if (cameras.length === 0) {
+                try {
+                    // First request camera permission
+                    const initialStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    initialStream.getTracks().forEach(track => track.stop()); // Stop the initial stream
+                    
+                    // Now we can get the camera list
+                    await getCameraDevices();
+                } catch (error) {
+                    console.error('Failed to get camera permission:', error);
+                    alert('Failed to get camera permission: ' + (error.message || 'Unknown error'));
+                }
+            }
+            toggleCamera();
+        });
+
         // Handle file input change
         document.getElementById('image-input').addEventListener('change', function(e) {
             if (this.files && this.files[0]) {
                 const preview = document.getElementById('preview');
                 preview.src = URL.createObjectURL(this.files[0]);
             }
+        });
+
+        // Add event listener for threshold checkbox
+        document.getElementById('threshold').addEventListener('change', function() {
+            document.getElementById('threshold-controls').style.display = 
+                this.checked ? 'flex' : 'none';
+        });
+
+        // Add event listener for threshold value
+        document.getElementById('threshold-value').addEventListener('input', function() {
+            document.getElementById('threshold-display').textContent = this.value;
         });
     </script>
 </body>
