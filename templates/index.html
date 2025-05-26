@@ -500,7 +500,7 @@
         let scheduler = null;
         let stream = null;
         let cameras = [];
-        let loadedLanguages = new Set(['eng']); // Track loaded languages
+        let loadedLanguages = new Set();
         let dictionaries = {
             eng: new Set(),
             fil: new Set()
@@ -543,8 +543,9 @@
         }
 
         // Modified initWorker function to handle language loading
-        async function initWorker() {
+        async function initWorker(initialLanguage = 'eng') {
             try {
+                // Create new worker and scheduler
                 scheduler = Tesseract.createScheduler();
                 worker = await Tesseract.createWorker({
                     logger: message => {
@@ -558,8 +559,8 @@
                     }
                 });
                 
-                // Initialize with English by default
-                await loadLanguage('eng');
+                // Load initial language
+                await loadLanguage(initialLanguage);
                 await scheduler.addWorker(worker);
                 
                 document.getElementById('process-btn').disabled = false;
@@ -569,11 +570,16 @@
                 const progress = document.getElementById('progress');
                 progress.textContent = `Failed to initialize OCR engine: ${error.message || 'Unknown error'}`;
                 progress.className = 'progress error';
+                throw error; // Propagate error for handling
             }
         }
 
         // Function to load a language
         async function loadLanguage(lang) {
+            if (!worker) {
+                throw new Error('OCR engine not initialized');
+            }
+
             const loadingDiv = document.getElementById('loading-language');
             const processBtn = document.getElementById('process-btn');
             
@@ -584,14 +590,22 @@
                 try {
                     await worker.loadLanguage(lang);
                     loadedLanguages.add(lang);
+                } catch (error) {
+                    console.error(`Failed to load language ${lang}:`, error);
+                    throw error; // Propagate error for handling
                 } finally {
                     loadingDiv.style.display = 'none';
                     processBtn.disabled = false;
                 }
             }
             
-            // Initialize the worker with the selected language(s)
-            await worker.initialize(lang);
+            try {
+                // Initialize the worker with the selected language(s)
+                await worker.initialize(lang);
+            } catch (error) {
+                console.error(`Failed to initialize language ${lang}:`, error);
+                throw error; // Propagate error for handling
+            }
         }
 
         // Modified processImage function
@@ -1063,20 +1077,40 @@
             const selectedLang = this.value;
             const progress = document.getElementById('progress');
             progress.textContent = 'Switching language...';
+            progress.className = 'progress';
             
             try {
-                await loadLanguage(selectedLang);
+                // If worker doesn't exist, initialize it with the selected language
+                if (!worker) {
+                    await initWorker(selectedLang);
+                } else {
+                    await loadLanguage(selectedLang);
+                }
+                
                 progress.textContent = 'Ready to process images';
                 
                 // Reprocess current image if one exists
-                if (document.getElementById('preview').src) {
+                const preview = document.getElementById('preview');
+                if (preview.src && preview.src !== window.location.href) {
                     await processImage();
                 }
             } catch (error) {
                 console.error('Language switch failed:', error);
                 progress.textContent = `Failed to switch language: ${error.message || 'Unknown error'}`;
                 progress.className = 'progress error';
+                
+                // Reset selection to previously working language if possible
+                const prevLang = Array.from(loadedLanguages)[0] || 'eng';
+                this.value = prevLang;
             }
+        });
+
+        // Initialize the worker when page loads
+        document.getElementById('process-btn').disabled = true;
+        document.getElementById('progress').textContent = 'Initializing OCR engine...';
+        initWorker().catch(error => {
+            console.error('Failed to initialize worker:', error);
+            // Additional error handling if needed
         });
     </script>
 </body>
